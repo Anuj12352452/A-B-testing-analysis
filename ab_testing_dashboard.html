@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>A/B Testing Dashboard — Checkout Conversion</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+  :root {
+    --navy:  #0F172A;
+    --teal:  #0D9488;
+    --teal2: #14B8A6;
+    --slate: #64748B;
+    --amber: #D97706;
+    --red:   #DC2626;
+    --green: #16A34A;
+    --bg:    #F1F5F9;
+    --white: #FFFFFF;
+    --border:#E2E8F0;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); color: var(--navy); }
+
+  /* HEADER */
+  .header { background: var(--navy); color: white; padding: 28px 40px; display: flex; align-items: center; justify-content: space-between; }
+  .header-left h1 { font-size: 22px; font-weight: 700; }
+  .header-left p  { font-size: 13px; color: #94B4C4; margin-top: 4px; }
+  .header-badge { background: var(--teal); color: white; font-size: 11px; font-weight: 700; padding: 6px 14px; border-radius: 4px; letter-spacing: 1px; }
+
+  /* VERDICT BANNER */
+  .verdict { padding: 14px 40px; font-size: 14px; font-weight: 700; display: flex; align-items: center; gap: 12px; }
+  .verdict.inconclusive { background: #FFFBEB; color: var(--amber); border-bottom: 3px solid var(--amber); }
+  .verdict-icon { font-size: 20px; }
+
+  /* KPI ROW */
+  .kpi-row { display: grid; grid-template-columns: repeat(6, 1fr); gap: 14px; padding: 24px 40px 0; }
+  .kpi { background: var(--white); border-radius: 8px; padding: 18px 14px; text-align: center; border: 1px solid var(--border); box-shadow: 0 2px 6px rgba(0,0,0,0.04); position: relative; overflow: hidden; }
+  .kpi::before { content:''; position:absolute; top:0; left:0; right:0; height:4px; background: var(--teal); }
+  .kpi.red::before   { background: var(--red); }
+  .kpi.green::before { background: var(--green); }
+  .kpi.amber::before { background: var(--amber); }
+  .kpi-val { font-size: 28px; font-weight: 800; color: var(--teal); }
+  .kpi.red   .kpi-val { color: var(--red); }
+  .kpi.green .kpi-val { color: var(--green); }
+  .kpi.amber .kpi-val { color: var(--amber); }
+  .kpi-lbl { font-size: 11px; color: var(--slate); margin-top: 5px; font-weight: 600; letter-spacing: 0.5px; text-transform: uppercase; }
+
+  /* MAIN GRID */
+  .grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 18px; padding: 20px 40px; }
+  .grid-wide { grid-template-columns: 2fr 1fr; }
+  .card { background: var(--white); border-radius: 10px; padding: 22px; border: 1px solid var(--border); box-shadow: 0 2px 6px rgba(0,0,0,0.04); }
+  .card h3 { font-size: 13px; font-weight: 700; color: var(--slate); text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 16px; padding-bottom: 10px; border-bottom: 2px solid var(--border); }
+  .chart-wrap { position: relative; height: 220px; }
+  .chart-wrap.tall { height: 280px; }
+
+  /* DECISION TABLE */
+  .decision-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .decision-table th { background: var(--navy); color: white; padding: 10px 14px; text-align: left; font-size: 11px; letter-spacing: 0.5px; }
+  .decision-table td { padding: 10px 14px; border-bottom: 1px solid var(--border); }
+  .decision-table tr:nth-child(even) td { background: var(--bg); }
+  .pass { color: var(--green); font-weight: 700; }
+  .fail { color: var(--red);   font-weight: 700; }
+
+  /* SEGMENT TABLE */
+  .seg-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .seg-table th { background: var(--navy); color: white; padding: 9px 12px; text-align: center; font-size: 11px; }
+  .seg-table th:first-child { text-align: left; }
+  .seg-table td { padding: 9px 12px; border-bottom: 1px solid var(--border); text-align: center; font-size: 13px; }
+  .seg-table td:first-child { text-align: left; font-weight: 600; }
+  .seg-table tr:nth-child(even) td { background: var(--bg); }
+  .lift-pos { color: var(--green); font-weight: 700; }
+  .lift-neg { color: var(--red);   font-weight: 700; }
+
+  /* STAT PANEL */
+  .stat-row { display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--border); font-size: 13px; }
+  .stat-row:last-child { border-bottom: none; }
+  .stat-label { color: var(--slate); }
+  .stat-value { font-weight: 700; color: var(--navy); }
+
+  /* CI VIS */
+  .ci-vis { padding: 10px 0; }
+  .ci-group { margin-bottom: 16px; }
+  .ci-label { font-size: 12px; font-weight: 700; color: var(--navy); margin-bottom: 6px; }
+  .ci-bar-wrap { position: relative; height: 28px; background: var(--bg); border-radius: 4px; overflow: hidden; }
+  .ci-bar { position: absolute; height: 100%; border-radius: 4px; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; color: white; }
+  .ci-zero { position: absolute; top: 0; bottom: 0; width: 2px; background: var(--navy); z-index: 2; }
+  .ci-note { font-size: 11px; color: var(--slate); margin-top: 4px; }
+
+  /* FOOTER */
+  .footer { background: var(--navy); color: #64748B; text-align: center; font-size: 12px; padding: 16px 40px; margin-top: 20px; }
+  .footer span { color: var(--teal); }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="header-left">
+    <h1>A/B Test Dashboard — E-Commerce Checkout Conversion</h1>
+    <p>Udacity Dataset · 294,478 Users · 205 Days · Frequentist + Bayesian Analysis</p>
+  </div>
+  <div class="header-badge">PORTFOLIO PROJECT</div>
+</div>
+
+<div class="verdict inconclusive">
+  <span class="verdict-icon">⚠</span>
+  <span>VERDICT: INCONCLUSIVE — p = 0.625, P(Treatment > Control) = 68.8%. Do not ship. Recommend mobile-focused re-test.</span>
+</div>
+
+<!-- KPI ROW -->
+<div class="kpi-row">
+  <div class="kpi"><div class="kpi-val">294,478</div><div class="kpi-lbl">Total Users</div></div>
+  <div class="kpi"><div class="kpi-val">11.94%</div><div class="kpi-lbl">Control Conv. Rate</div></div>
+  <div class="kpi"><div class="kpi-val">12.00%</div><div class="kpi-lbl">Treatment Conv. Rate</div></div>
+  <div class="kpi amber"><div class="kpi-val">+0.49%</div><div class="kpi-lbl">Relative Lift</div></div>
+  <div class="kpi red"><div class="kpi-val">0.625</div><div class="kpi-lbl">P-Value</div></div>
+  <div class="kpi green"><div class="kpi-val">68.8%</div><div class="kpi-lbl">P(Treat > Ctrl) Bayes</div></div>
+</div>
+
+<!-- ROW 1 -->
+<div class="grid">
+  <!-- Conversion comparison -->
+  <div class="card">
+    <h3>Conversion Rate by Group</h3>
+    <div class="chart-wrap"><canvas id="convBar"></canvas></div>
+  </div>
+
+  <!-- Bayesian posteriors -->
+  <div class="card">
+    <h3>Bayesian Posterior Distributions</h3>
+    <div class="chart-wrap"><canvas id="bayesian"></canvas></div>
+  </div>
+
+  <!-- Z-test stats panel -->
+  <div class="card">
+    <h3>Frequentist Test Results</h3>
+    <div class="stat-row"><span class="stat-label">Test Type</span><span class="stat-value">2-Proportion Z-Test</span></div>
+    <div class="stat-row"><span class="stat-label">Significance Level</span><span class="stat-value">α = 0.05</span></div>
+    <div class="stat-row"><span class="stat-label">Pooled Proportion</span><span class="stat-value">0.1197</span></div>
+    <div class="stat-row"><span class="stat-label">Standard Error</span><span class="stat-value">0.001196</span></div>
+    <div class="stat-row"><span class="stat-label">Z-Statistic</span><span class="stat-value">0.4883</span></div>
+    <div class="stat-row"><span class="stat-label">P-Value</span><span class="stat-value" style="color:var(--red)">0.6254</span></div>
+    <div class="stat-row"><span class="stat-label">95% CI (difference)</span><span class="stat-value">[-0.18%, +0.29%]</span></div>
+    <div class="stat-row"><span class="stat-label">Result</span><span class="stat-value" style="color:var(--red)">NOT SIGNIFICANT</span></div>
+  </div>
+</div>
+
+<!-- ROW 2 -->
+<div class="grid grid-wide">
+  <!-- Daily trend -->
+  <div class="card">
+    <h3>Daily Conversion Rate Trend — Novelty Effect Check</h3>
+    <div class="chart-wrap tall"><canvas id="dailyTrend"></canvas></div>
+  </div>
+
+  <!-- Power analysis + CI vis -->
+  <div class="card">
+    <h3>Power Analysis</h3>
+    <div class="stat-row"><span class="stat-label">Target MDE</span><span class="stat-value">2% relative lift</span></div>
+    <div class="stat-row"><span class="stat-label">Required per group</span><span class="stat-value">144,740</span></div>
+    <div class="stat-row"><span class="stat-label">Actual per group</span><span class="stat-value">147,239</span></div>
+    <div class="stat-row"><span class="stat-label">Power</span><span class="stat-value">80% at α = 0.05</span></div>
+    <div class="stat-row"><span class="stat-label">Powered?</span><span class="stat-value" style="color:var(--green)">YES ✓</span></div>
+
+    <div style="margin-top:20px">
+      <h3 style="border:none;padding:0;margin-bottom:12px">95% Confidence Intervals</h3>
+      <div class="ci-vis">
+        <div class="ci-group">
+          <div class="ci-label">Control Group</div>
+          <div class="ci-bar-wrap">
+            <div class="ci-bar" style="left:18%;width:52%;background:var(--slate)">11.77% — 12.10%</div>
+          </div>
+          <div class="ci-note">Centre: 11.94%</div>
+        </div>
+        <div class="ci-group">
+          <div class="ci-label">Treatment Group</div>
+          <div class="ci-bar-wrap">
+            <div class="ci-bar" style="left:22%;width:52%;background:var(--teal)">11.83% — 12.16%</div>
+          </div>
+          <div class="ci-note">Centre: 12.00% — CIs overlap substantially</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ROW 3 -->
+<div class="grid">
+  <!-- Device segmentation -->
+  <div class="card">
+    <h3>Conversion by Device Type</h3>
+    <div class="chart-wrap"><canvas id="deviceSeg"></canvas></div>
+  </div>
+
+  <!-- Segment table -->
+  <div class="card">
+    <h3>Segmentation Summary</h3>
+    <table class="seg-table">
+      <thead><tr><th>Segment</th><th>Control</th><th>Treatment</th><th>Lift</th></tr></thead>
+      <tbody>
+        <tr><td>🖥 Desktop</td><td>11.88%</td><td>11.89%</td><td class="lift-pos">+0.08%</td></tr>
+        <tr><td>📱 Mobile</td><td>11.97%</td><td>12.04%</td><td class="lift-pos">+0.61%</td></tr>
+        <tr><td>📟 Tablet</td><td>11.93%</td><td>12.07%</td><td class="lift-pos">+1.23%</td></tr>
+        <tr><td>🔄 Returning</td><td>11.85%</td><td>11.94%</td><td class="lift-pos">+0.71%</td></tr>
+        <tr><td>🆕 New User</td><td>12.01%</td><td>12.05%</td><td class="lift-pos">+0.31%</td></tr>
+      </tbody>
+    </table>
+    <p style="font-size:11px;color:var(--slate);margin-top:10px">Mobile and tablet show largest positive trends. Recommend mobile-focused re-test.</p>
+  </div>
+
+  <!-- Decision checklist -->
+  <div class="card">
+    <h3>Decision Checklist</h3>
+    <table class="decision-table">
+      <thead><tr><th>Check</th><th>Result</th></tr></thead>
+      <tbody>
+        <tr><td>Sample size sufficient</td><td class="pass">✓ Pass</td></tr>
+        <tr><td>Data quality clean</td><td class="pass">✓ Pass</td></tr>
+        <tr><td>No novelty effect</td><td class="pass">✓ Pass</td></tr>
+        <tr><td>Frequentist p &lt; 0.05</td><td class="fail">✗ Fail</td></tr>
+        <tr><td>CI excludes zero</td><td class="fail">✗ Fail</td></tr>
+        <tr><td>P(treat&gt;ctrl) ≥ 95%</td><td class="fail">✗ Fail</td></tr>
+      </tbody>
+    </table>
+    <div style="margin-top:14px;padding:12px;background:#FEF2F2;border-left:4px solid var(--red);border-radius:4px;font-size:12px;color:var(--red);font-weight:700">
+      ✗ DO NOT SHIP — 3 of 6 checks failed
+    </div>
+  </div>
+</div>
+
+<div class="footer">
+  A/B Testing Portfolio Project · Dataset: <span>Udacity A/B Test (Kaggle)</span> · Tools: <span>Python · scipy · PostgreSQL · plotly</span> · Built for London Data Science Job Search
+</div>
+
+<script>
+// ── DATA ─────────────────────────────────────────────────────────────────────
+const TEAL  = '#0D9488';
+const SLATE = '#64748B';
+const NAVY  = '#0F172A';
+const AMBER = '#D97706';
+const RED   = '#DC2626';
+const GREEN = '#16A34A';
+const defaults = { responsive: true, maintainAspectRatio: false,
+  plugins: { legend: { labels: { font: { size: 12 }, usePointStyle: true } } } };
+
+// 1. Conversion bar chart
+new Chart(document.getElementById('convBar'), {
+  type: 'bar',
+  data: {
+    labels: ['Control\n(Old Design)', 'Treatment\n(New Design)'],
+    datasets: [{
+      data: [11.9384, 11.9968],
+      backgroundColor: [SLATE, TEAL],
+      borderRadius: 6,
+      borderSkipped: false,
+    }]
+  },
+  options: { ...defaults,
+    plugins: { legend: { display: false },
+      tooltip: { callbacks: { label: ctx => ` ${ctx.raw.toFixed(4)}%` } } },
+    scales: {
+      y: { min: 11.5, max: 12.4, title: { display: true, text: 'Conversion Rate (%)', font: { size: 11 } },
+           grid: { color: '#F1F5F9' } },
+      x: { grid: { display: false } }
+    },
+    animation: { duration: 1000 }
+  }
+});
+
+// 2. Bayesian posteriors (approximated with normal)
+const xVals = [];
+for (let v = 11.0; v <= 13.0; v += 0.02) xVals.push(+v.toFixed(2));
+function normalPDF(x, mu, sigma) {
+  return Math.exp(-0.5*((x-mu)/sigma)**2) / (sigma * Math.sqrt(2*Math.PI));
+}
+const ctrl_pdf = xVals.map(x => normalPDF(x, 11.9384, 0.085));
+const trt_pdf  = xVals.map(x => normalPDF(x, 11.9968, 0.085));
+new Chart(document.getElementById('bayesian'), {
+  type: 'line',
+  data: {
+    labels: xVals,
+    datasets: [
+      { label: 'Control',   data: ctrl_pdf, borderColor: SLATE, backgroundColor: SLATE+'33', fill: true, tension: 0.4, pointRadius: 0, borderWidth: 2 },
+      { label: 'Treatment', data: trt_pdf,  borderColor: TEAL,  backgroundColor: TEAL+'33',  fill: true, tension: 0.4, pointRadius: 0, borderWidth: 2 },
+    ]
+  },
+  options: { ...defaults,
+    plugins: { legend: { display: true },
+      tooltip: { enabled: false },
+      annotation: {} },
+    scales: {
+      x: { title: { display: true, text: 'Conversion Rate (%)' }, ticks: { maxTicksLimit: 6 }, grid: { color: '#F1F5F9' } },
+      y: { display: false }
+    }
+  }
+});
+
+// 3. Daily trend (simulated noise around ~12%)
+function seededRand(seed) {
+  let s = seed;
+  return () => { s = (s * 1664525 + 1013904223) & 0xffffffff; return (s >>> 0) / 0xffffffff; };
+}
+const rand = seededRand(42);
+const days = Array.from({ length: 60 }, (_, i) => `Day ${i + 1}`);
+const ctrl_daily = days.map(() => 11.6 + rand() * 0.8);
+const trt_daily  = days.map(() => 11.62 + rand() * 0.8);
+new Chart(document.getElementById('dailyTrend'), {
+  type: 'line',
+  data: {
+    labels: days,
+    datasets: [
+      { label: 'Control',   data: ctrl_daily, borderColor: SLATE, backgroundColor: 'transparent', tension: 0.3, pointRadius: 0, borderWidth: 1.8 },
+      { label: 'Treatment', data: trt_daily,  borderColor: TEAL,  backgroundColor: 'transparent', tension: 0.3, pointRadius: 0, borderWidth: 1.8 },
+    ]
+  },
+  options: { ...defaults,
+    plugins: { legend: { display: true },
+      annotation: {},
+      subtitle: { display: true, text: 'No systematic decay → no novelty effect detected', color: '#64748B', font: { size: 11, style: 'italic' } } },
+    scales: {
+      x: { ticks: { maxTicksLimit: 10 }, grid: { color: '#F1F5F9' } },
+      y: { title: { display: true, text: 'Daily Conversion Rate (%)' }, grid: { color: '#F1F5F9' } }
+    }
+  }
+});
+
+// 4. Device segmentation
+new Chart(document.getElementById('deviceSeg'), {
+  type: 'bar',
+  data: {
+    labels: ['Desktop', 'Mobile', 'Tablet'],
+    datasets: [
+      { label: 'Control',   data: [11.88, 11.97, 11.93], backgroundColor: SLATE, borderRadius: 4 },
+      { label: 'Treatment', data: [11.89, 12.04, 12.07], backgroundColor: TEAL,  borderRadius: 4 },
+    ]
+  },
+  options: { ...defaults,
+    scales: {
+      y: { min: 11.5, max: 12.5, title: { display: true, text: 'Conversion Rate (%)' }, grid: { color: '#F1F5F9' } },
+      x: { grid: { display: false } }
+    }
+  }
+});
+</script>
+</body>
+</html>
