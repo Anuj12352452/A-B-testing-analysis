@@ -26,7 +26,7 @@ import numpy as np
 from scipy import stats
 from scipy.stats import norm
 import matplotlib
-matplotlib.use("Agg")  # non-interactive backend (safe for all environments)
+matplotlib.use("Agg") 
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 import seaborn as sns
